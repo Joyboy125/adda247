@@ -1,0 +1,9 @@
+cloudscraper
+pyrofork==2.3.48
+asyncio
+ffmpeg-python
+gunicorn
+requests
+flask
+tgcrypto
+https://github.com/KurimuzonAkuma/pyrogram/archive/v2.1.23.zip
