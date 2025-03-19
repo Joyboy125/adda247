@@ -5,6 +5,14 @@ import os
 from pyrogram import Client, filters
 from pyrogram.types import Message
 
+import subprocess
+
+try:
+    subprocess.run(["ffmpeg", "-version"], check=True)
+    print("✅ FFmpeg is installed and working!")
+except FileNotFoundError:
+    print("❌ FFmpeg is missing!")
+
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
