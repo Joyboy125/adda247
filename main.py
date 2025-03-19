@@ -33,6 +33,20 @@ plugins={"root": "plugins"}
 
 animebot = Client(name="animemonster_bot", api_id=api_id, api_hash=api_hash, bot_token=animemonster_bot, plugins=plugins, sleep_threshold=15)
 
+from flask import Flask, request
+
+app = Flask(__name__)
+
+@app.route("/", methods=["GET"])
+def home():
+    return "Bot is running!"
+
+@app.route("/webhook", methods=["POST"])
+def webhook():
+    update = request.get_json()
+    # Process the update
+    return "OK"
+
 
 async def main():
     try:
@@ -49,5 +63,6 @@ async def main():
 
 if __name__ == "__main__":
     loop = asyncio.get_event_loop_policy().get_event_loop()
+    app.run(host="0.0.0.0", port=8080)
     loop.run_until_complete(main())
     print("Bot stopped.")
