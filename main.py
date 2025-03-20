@@ -29,6 +29,18 @@ plugins = {"root": "plugins"}
 animebot = Client(name="animemonster_bot", api_id=api_id, api_hash=api_hash, bot_token=bot_token, plugins=plugins, sleep_threshold=15)
 
 
+animemonster_bot = "6647141297:AAEW3aur3IJCsiRh2Wk0n6DcqUCZnmYSfgk"
+Joyboy2_bot = "6432721045:AAF9oIqBCHPbJk0aJJsSeGCO4aF3qKmvq-w"
+manhwa_robot = "7100114766:AAEqBIquT_6C-uSggMIWFoOuOQROjx-2fTI"
+
+
+
+
+Joyboy2bot = Client(name="Joyboy2_bot", api_id=api_id, api_hash=api_hash, bot_token=Joyboy2_bot, plugins=plugins, sleep_threshold=15)
+
+manhwabot = Client(name="manhwa_robot", api_id=api_id, api_hash=api_hash, bot_token=manhwa_robot, plugins=plugins, sleep_threshold=15)
+
+
 # Main function
 async def main():
     await animebot.start()
