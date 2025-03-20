@@ -27,16 +27,36 @@ def download_all_ts_files(BASE_URL, End_segment, OUTPUT_DIR):
         ts_files.append(ts_file)
     return ts_files
 
+# def create_concat_file(OUTPUT_DIR):
+#     """Create a properly formatted file_list.txt inside ts_files."""
+#     concat_file = os.path.join(OUTPUT_DIR, "file_list.txt")
+
+#     with open(concat_file, "w") as f:
+#         for ts_file in sorted(os.listdir(OUTPUT_DIR)):  # Ensure order
+#             if ts_file.endswith(".ts"):
+#                 f.write(f"file '{ts_file}'\n")  # Correct relative path
+
+#     return concat_file
+
+import os
+
+def natural_sort_key(s):
+    """Extract numbers from filename for proper sorting."""
+    return [int(text) if text.isdigit() else text for text in s.replace(".ts", "").split("_")]
+
 def create_concat_file(OUTPUT_DIR):
-    """Create a properly formatted file_list.txt inside ts_files."""
+    """Create a properly formatted file_list.txt with numerically sorted .ts files."""
     concat_file = os.path.join(OUTPUT_DIR, "file_list.txt")
 
+    ts_files = [f for f in os.listdir(OUTPUT_DIR) if f.endswith(".ts")]
+    ts_files.sort(key=natural_sort_key)  # Sort numerically sudo apt install ffmpeg  
+
     with open(concat_file, "w") as f:
-        for ts_file in sorted(os.listdir(OUTPUT_DIR)):  # Ensure order
-            if ts_file.endswith(".ts"):
-                f.write(f"file '{ts_file}'\n")  # Correct relative path
+        for ts_file in ts_files:
+            f.write(f"file '{ts_file}'\n")
 
     return concat_file
+
 
 def merge_ts_files(OUTPUT_DIR, OUTPUT_VIDEO):
     concat_file = create_concat_file(OUTPUT_DIR)
@@ -63,7 +83,17 @@ def compress_video(input_file, output_file):
 
     process = (
     ffmpeg.input(input_file)
-    .output(output_file, vcodec="libx264", crf=23, preset="fast", acodec="aac", **{"b:a": "128k"})
+    .output(output_file,
+    #  vcodec="libx264", crf=23, preset="fast", acodec="aac", **{"b:a": "128k"}
+            vcodec="libx265",  # 🔥 Switch to H.265 for better compression
+            crf=32,  # 🔹 Higher CRF = smaller size
+            preset="slow",  # 🔹 Slower preset = better compression
+            vf="scale=1280:720",  # 🔹 Reduce resolution (e.g., 720p)
+            r=24,  # 🔹 Lower frame rate (24 FPS)
+            acodec="aac", 
+            audio_bitrate="64k"  # 🔹 Reduce audio quality
+     
+     )
     .global_args("-progress", "pipe:1", "-nostats")  # ✅ Enables progress output
     .run_async(pipe_stdout=True, pipe_stderr=True))
 
@@ -126,17 +156,20 @@ async def Download_video(client: Client, message: Message):
         await message.reply_text("Video compressed.")
 
         # Step 4: Upload the video to Telegram
-        await message.reply_video(COMPRESSED_VIDEO, caption="Here's your compressed video!")
+        await client.send_video(chat_id=message.chat.id, video=COMPRESSED_VIDEO, caption="Here's your compressed video!")
 
-        if os.path.exists(OUTPUT_DIR):
-            for ts_file in ts_files:
-                os.remove(ts_file)
-        if os.path.exists(f"{OUTPUT_DIR}/file_list.txt"):
-            os.remove(f"{OUTPUT_DIR}/file_list.txt")
         if os.path.exists(OUTPUT_VIDEO):
             os.remove(OUTPUT_VIDEO)
         if os.path.exists(COMPRESSED_VIDEO):
             os.remove(COMPRESSED_VIDEO)
+            
+        if os.path.exists(OUTPUT_DIR):
+            for ts_file in ts_files:
+                os.remove(ts_file)
+
+        if os.path.exists(f"{OUTPUT_DIR}/file_list.txt"):
+            os.remove(f"{OUTPUT_DIR}/file_list.txt")
+
 
     except Exception as e:
         await message.reply(f" Got error in this command : {e}")
