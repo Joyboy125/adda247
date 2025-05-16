@@ -1,9 +1,11 @@
 import os
 import requests
 from pyrogram import Client, filters
-from pyrogram.types import Message
+from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, InputMediaPhoto, CallbackQuery, InputMediaVideo
+
 import ffmpeg
 import asyncio
+import logging
 
 """sudo apt update && sudo apt install ffmpeg -y
 """
@@ -17,7 +19,6 @@ def download_ts_file(url, filename):
     else:
         print(f"Failed to download {url}")
 
-
 def download_all_ts_files(BASE_URL, End_segment, OUTPUT_DIR):
     ts_files = []
     for i in range(0, End_segment + 1):  # Adjust the range based on the number of .ts files
@@ -27,18 +28,37 @@ def download_all_ts_files(BASE_URL, End_segment, OUTPUT_DIR):
         ts_files.append(ts_file)
     return ts_files
 
-# def create_concat_file(OUTPUT_DIR):
-#     """Create a properly formatted file_list.txt inside ts_files."""
-#     concat_file = os.path.join(OUTPUT_DIR, "file_list.txt")
-
-#     with open(concat_file, "w") as f:
-#         for ts_file in sorted(os.listdir(OUTPUT_DIR)):  # Ensure order
-#             if ts_file.endswith(".ts"):
-#                 f.write(f"file '{ts_file}'\n")  # Correct relative path
-
-#     return concat_file
-
 import os
+import subprocess
+
+def ts_to_image(ts_file, output_image="output.jpg", time="00:00:01"):
+    """
+    Extracts a frame from a TS segment and saves it as an image.
+
+    :param ts_file: Path to the .ts video file
+    :param output_image: Path to save the extracted image (default: output.jpg)
+    :param time: Timestamp (HH:MM:SS) to capture the frame (default: 1 second)
+    :return: Path of the saved image
+    """
+    command = [
+        "ffmpeg",
+        "-i", ts_file,        # Input file
+        "-ss", time,          # Time position
+        "-vframes", "1",      # Capture a single frame
+        output_image,         # Output file
+        "-y"                  # Overwrite if file exists
+    ]
+    
+    try:
+        subprocess.run(command, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        print(f"Image saved as {output_image}")
+        return output_image
+    except subprocess.CalledProcessError as e:
+        print(f"Error extracting image: {e}")
+        return None
+
+# Example usage
+
 
 def natural_sort_key(s):
     """Extract numbers from filename for proper sorting."""
@@ -75,8 +95,6 @@ def merge_ts_files(OUTPUT_DIR, OUTPUT_VIDEO):
 def compress_video(input_file, output_file):
 
     """ Compress the video using ffmpeg """
-    crf=28
-    preset="fast"
     if not os.path.exists(input_file):
         print(f"Error: {input_file} not found!")
         return
@@ -85,23 +103,23 @@ def compress_video(input_file, output_file):
     ffmpeg.input(input_file)
     .output(output_file,
     #  vcodec="libx264", crf=23, preset="fast", acodec="aac", **{"b:a": "128k"}
-            vcodec="libx265",  # 🔥 Switch to H.265 for better compression
-            crf=32,  # 🔹 Higher CRF = smaller size
-            preset="slow",  # 🔹 Slower preset = better compression
-            vf="scale=1280:720",  # 🔹 Reduce resolution (e.g., 720p)
-            r=24,  # 🔹 Lower frame rate (24 FPS)
+            vcodec="libx265", 
+            crf=32, 
+            preset="slow",  
+            vf="scale=1280:720", 
+            r=24,  
             acodec="aac", 
-            audio_bitrate="64k"  # 🔹 Reduce audio quality
+            audio_bitrate="64k"  
      
      )
-    .global_args("-progress", "pipe:1", "-nostats")  # ✅ Enables progress output
+    .global_args("-progress", "pipe:1", "-nostats")  
     .run_async(pipe_stdout=True, pipe_stderr=True))
 
     while True:
         line = process.stdout.readline().decode("utf-8", errors="ignore")
         if not line:
             break
-        if "out_time_ms" in line:  # 🔹 Extracts progress in microseconds
+        if "out_time_ms" in line:  
             time_ms = int(line.split("=")[1])
             time_sec = time_ms / 1_000_000
             print(f"🔄 Encoding Progress: {time_sec:.2f} sec", end="\r", flush=True)
@@ -122,16 +140,8 @@ async def Download_video(client: Client, message: Message):
         # Extract the format from the command
         BASE_URL = message.text.split("/download_video", 1)[1].strip()
 
-        try:
-            first_message = await client.ask(
-                    text="Send me total segment numbers",
-                    chat_id=message.chat.id,
-                    filters=(filters.text),
-                    timeout=50 
-            )
-        except asyncio.TimeoutError:
-                await message.reply_text("Request timed out. Please try again.")
-                return
+        fragment_count = d.split("/")[-1:][0].split(".")[0]
+
         
         me = await client.get_me()
         bot_username = me.username
@@ -144,28 +154,42 @@ async def Download_video(client: Client, message: Message):
 
         await message.reply_text("Starting video download and processing...")
 
-        ts_files = download_all_ts_files(BASE_URL, int(first_message.text), OUTPUT_DIR)
+        logging.info(f" total segment : {fragment_count}")
+
+        ts_files = download_all_ts_files(BASE_URL, int(fragment_count), OUTPUT_DIR)
         await message.reply_text("All .ts files downloaded. merging the video....")
 
         # Step 2: Merge .ts files
         merge_ts_files(OUTPUT_DIR, OUTPUT_VIDEO)
         await message.reply_text("Video merged. compressing video....")
-
+ 
         # Step 3: Compress the video
-        compress_video(OUTPUT_VIDEO, COMPRESSED_VIDEO)
+        # compress_video(OUTPUT_VIDEO, COMPRESSED_VIDEO)
+        await message.reply("taking ss...")
+        ts_to_image(OUTPUT_VIDEO, "frame.jpg", "00:00:05")
         await message.reply_text("Video compressed.")
 
         # Step 4: Upload the video to Telegram
-        await client.send_video(chat_id=message.chat.id, video=COMPRESSED_VIDEO, caption="Here's your compressed video!")
+        await message.reply("uploading video")
+        await client.send_video(chat_id=message.chat.id, video=OUTPUT_VIDEO, caption="Here's your compressed video!", thumb="frame.jpg", width=640, height=360, supports_streaming=True)
+        await message.reply("uploaded video")
+
 
         if os.path.exists(OUTPUT_VIDEO):
             os.remove(OUTPUT_VIDEO)
+
+        if os.path.exists("frame.jpg"):
+            os.remove("frame.jpg")
+
         if os.path.exists(COMPRESSED_VIDEO):
             os.remove(COMPRESSED_VIDEO)
             
         if os.path.exists(OUTPUT_DIR):
-            for ts_file in ts_files:
-                os.remove(ts_file)
+                for ts_file in ts_files:
+                    try:
+                        os.remove(ts_file)
+                    except Exception as e:
+                        print(f"got error in deleting {ts_file}")
 
         if os.path.exists(f"{OUTPUT_DIR}/file_list.txt"):
             os.remove(f"{OUTPUT_DIR}/file_list.txt")
@@ -175,6 +199,14 @@ async def Download_video(client: Client, message: Message):
         await message.reply(f" Got error in this command : {e}")
 
 
+@Client.on_message(filters.command("video"))
+async def send_video(client: Client, message: Message):
+    await message.reply("sending video...")
+    ts_to_image("manhwa_robot_output.mp4", "frame.jpg", "00:00:05")
+    await client.send_animation(chat_id=message.chat.id, animation="manhwa_robot_output.mp4", caption="Here's your compressed video", thumb="frame.jpg", width=640, height=360)
+
+ 
 @Client.on_message(filters.command("start"))
 async def start(client: Client, message: Message):
     await message.reply(f"i am online")
+
